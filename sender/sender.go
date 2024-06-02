@@ -12,12 +12,12 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-var (
+type WireTCPSender struct {
 	conn     net.Conn
 	connLock sync.Mutex
-)
+}
 
-func NewTCPSender(addr string) (chan bool, chan struct{}) {
+func (w *WireTCPSender) Connect(addr string) (chan bool, chan struct{}) {
 	connected := make(chan bool)
 	closeChan := make(chan struct{})
 	reconnect := true
@@ -37,28 +37,28 @@ func NewTCPSender(addr string) (chan bool, chan struct{}) {
 
 			log.Printf("Connected to server")
 			connected <- true
-			connLock.Lock()
-			conn = c
-			connLock.Unlock()
+			w.connLock.Lock()
+			w.conn = c
+			w.connLock.Unlock()
 
 			go func() {
 				select {
 				case <-closeChan:
 					reconnect = false
-					connLock.Lock()
-					conn.Close()
-					connLock.Unlock()
+					w.connLock.Lock()
+					w.conn.Close()
+					w.connLock.Unlock()
 					connected <- false
 					return
 				}
 			}()
 
-			err = monitor(conn)
+			err = monitor(w.conn)
 			if err != nil && reconnect {
 				log.Printf("connection lost: %v", err)
 			}
 
-			conn.Close()
+			w.conn.Close()
 			connected <- false
 
 			if !reconnect {
@@ -74,7 +74,7 @@ func NewTCPSender(addr string) (chan bool, chan struct{}) {
 	return connected, closeChan
 }
 
-func Send(i any) error {
+func (w *WireTCPSender) Send(i any) error {
 	var buf bytes.Buffer
 	encoder := msgpack.NewEncoder(&buf)
 	err := encoder.Encode(i)
@@ -85,12 +85,12 @@ func Send(i any) error {
 	data := buf.Bytes()
 	length := int32(len(data))
 	log.Printf("Sending data length: %d", length)
-	err = binary.Write(conn, binary.LittleEndian, length)
+	err = binary.Write(w.conn, binary.LittleEndian, length)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Write(data)
+	_, err = w.conn.Write(data)
 	if err != nil {
 		return err
 	}

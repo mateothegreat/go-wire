@@ -9,7 +9,8 @@ import (
 )
 
 func TestSend(t *testing.T) {
-	connected, closeChan := NewTCPSender("127.0.0.1:15000")
+	wire := &WireTCPSender{}
+	connected, closeChan := wire.Connect("127.0.0.1:15000")
 
 	select {
 	case <-connected:
@@ -23,7 +24,7 @@ func TestSend(t *testing.T) {
 			Data:   f,
 		}
 
-		err = Send(image)
+		err = wire.Send(image)
 		if err != nil {
 			t.Errorf("Error sending image: %v", err)
 		}
